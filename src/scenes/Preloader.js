@@ -13,7 +13,7 @@ export class Preloader extends Phaser.Scene {
         this.load.image('pink_donut', 'images/pink_donut.png');
         // Load sounds
         this.load.audio('pop','sounds/pop.mp3');
-        this.load.audio('pop','sounds/pop.mp3');       
+        this.load.audio('background_music','sounds/background_music.mp3');       
     }
 
     create() {
