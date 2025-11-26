@@ -10,11 +10,12 @@ export class Game extends Phaser.Scene {
     this.currentScore = 0;
     this.maxScore = 0;
     this.donutsPerBox = 25;
+    this.donuts = [];
   }
 
   create() {
     this.cameras.main.setBackgroundColor(0x313131);
-    this.sound.play("background_music", { loop: true, volume: 0.3 });
+    // this.sound.play("background_music", { loop: true, volume: 0.3 });
 
     // Create finger click animations
     this.anims.create({
@@ -33,8 +34,10 @@ export class Game extends Phaser.Scene {
     this.matter.add.rectangle(width / 2, height + 10, width, 20, {
       isStatic: true,
     }); // bottom
-    this.matter.add.rectangle(-10, height / 2, 20, height, { isStatic: true }); // left
-    this.matter.add.rectangle(width + 10, height / 2, 20, height, {
+    this.matter.add.rectangle(-10, height / 2, 20, height * 4, {
+      isStatic: true,
+    }); // left
+    this.matter.add.rectangle(width + 10, height / 2, 20, height * 4, {
       isStatic: true,
     }); // right
 
@@ -42,7 +45,7 @@ export class Game extends Phaser.Scene {
     const spacingY = 120;
 
     const cols = Math.floor((width - 80) / spacingX);
-    const rows = 15;
+    const rows = 30;
 
     // Spawn Donuts
     for (let i = 0; i < rows; i++) {
@@ -58,10 +61,11 @@ export class Game extends Phaser.Scene {
         donut.setCircle((donut.width * 0.5) / 2);
         donut.setBounce(0.2);
         donut.setFriction(0.05);
-        donut.setMass(2);
+        donut.setMass(1.5);
 
         donut.setInteractive();
         donut.on("pointerdown", () => this.onClickDonut(donut));
+        this.donuts.push(donut);
       }
     }
 
@@ -95,42 +99,19 @@ export class Game extends Phaser.Scene {
       boxContainer.box = boxImg;
       boxContainer.donut = donut;
       boxContainer.text = text;
+      boxContainer.box.originalScale = boxImg.scale;
+      boxContainer.text.originalScale = text.scale;
+      boxContainer.donut.originalScale = donut.scale;
 
       this.boxes.push(boxContainer);
     }
 
     this.maxScore = this.boxes.length * this.donutsPerBox;
 
-    this.add.sprite(400, 600, "fingerclick").play("fingerclick");
+    // this.add.sprite(400, 600, "fingerclick").play("fingerclick");
   }
 
   onClickDonut(donut) {
-    // Check Winner
-    if (this.currentScore >= this.maxScore) {
-      if (!this.winner) {
-        const winnerText = this.add
-          .text(400, 600, "WINNER", {
-            fontFamily: "Arial Black",
-            fontSize: "100px",
-            color: "#ffea00",
-            stroke: "#000000",
-            strokeThickness: 10,
-          })
-          .setOrigin(0.5);
-
-        this.tweens.add({
-          targets: winnerText,
-          scale: 1.2,
-          duration: 400,
-          yoyo: true,
-          loop: -1,
-          ease: "Linear",
-        });
-        this.winner = true;
-      }
-      return;
-    }
-
     // Handle donut
     if (donut.destroyed) return;
     donut.destroyed = true;
@@ -145,16 +126,22 @@ export class Game extends Phaser.Scene {
         targetY = box.y;
         targetBox = box;
         if (box.donutCounts > 0) {
+          // Set donut status
+          donut.setSensor(true);
+          donut.setIgnoreGravity(true);
+          donut.setDepth(999);
+
           box.donutCounts -= 1;
+          this.currentScore += 1;
+
+          this.checkWinner();
+        } else {
+          // Block click processing when any donutCounts = 0
+          return;
         }
         break;
       }
     }
-
-    // Set donut status
-    donut.setSensor(true);
-    donut.setIgnoreGravity(true);
-    donut.setDepth(999);
 
     // Move donut to box and popup box
     this.tweens.add({
@@ -164,39 +151,40 @@ export class Game extends Phaser.Scene {
       duration: 500,
       ease: "Linear",
       onComplete: () => {
-        if (targetBox) {
-          this.tweens.add({
-            targets: [targetBox.box, targetBox.text],
-            scale: 1.1,
-            duration: 200,
-            ease: "Linear",
-            yoyo: true,
-            onActive: () => {
-              targetBox.box.preFX.setPadding(32);
-              const fx = targetBox.box.preFX.addGlow();
-              this.tweens.add({
-                targets: fx,
-                color: 0xffea00,
-                outerStrength: 8,
-                duration: 400,
-                ease: "Linear",
-                onComplete: () => {
-                  fx.destroy();
-                },
-              });
-              this.tweens.add({
-                targets: targetBox.donut,
-                scale: 0.6,
-                duration: 200,
-                ease: "Linear",
-                yoyo: true,
-              });
-            },
-          });
-          targetBox.text.setText("x" + targetBox.donutCounts);
-          this.currentScore += 1;
-        }
         donut.destroy();
+
+        targetBox.text.setText("x" + targetBox.donutCounts);
+
+        this.tweens.add({
+          targets: targetBox.box,
+          scale: targetBox.box.originalScale * 1.1,
+          duration: 100,
+          ease: "Linear",
+          yoyo: true,
+          // Add tween beblow to fix scale when spam click donut
+          onComplete: () => {
+            this.tweens.add({
+              targets: targetBox.box,
+              scale: targetBox.box.originalScale,
+              duration: 100,
+              ease: "Linear",
+            });
+          },
+        });
+
+        // Glow box
+        targetBox.box.preFX.setPadding(32);
+        const fx = targetBox.box.preFX.addGlow();
+        this.tweens.add({
+          targets: fx,
+          color: 0xffea00,
+          outerStrength: 8,
+          duration: 200,
+          ease: "Linear",
+          onComplete: () => {
+            fx.destroy();
+          },
+        });
       },
     });
 
@@ -245,5 +233,32 @@ export class Game extends Phaser.Scene {
         emitting: false,
       })
       .explode(15);
+  }
+
+  checkWinner() {
+    if (this.currentScore >= this.maxScore) {
+      if (!this.winner) {
+        const winnerText = this.add
+          .text(400, 600, "WINNER", {
+            fontFamily: "Arial Black",
+            fontSize: "100px",
+            color: "#ffea00",
+            stroke: "#000000",
+            strokeThickness: 10,
+          })
+          .setOrigin(0.5);
+
+        this.tweens.add({
+          targets: winnerText,
+          scale: 1.2,
+          duration: 400,
+          yoyo: true,
+          loop: -1,
+          ease: "Linear",
+        });
+        this.winner = true;
+      }
+      return;
+    }
   }
 }
