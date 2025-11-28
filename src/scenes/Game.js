@@ -134,8 +134,6 @@ export class Game extends Phaser.Scene {
     });
   }
 
-  update() {}
-
   showGuide() {
     if (this.winner || this.donuts.length === 0) return;
 
@@ -294,6 +292,12 @@ export class Game extends Phaser.Scene {
     this.guideDonut = null;
     this.fingerclick.setVisible(false);
     this.scheduleNextGuide();
+
+    if (this.winner) {
+      this.time.delayedCall(1000, () => {
+        window.open("https://nduong18.github.io/Display-Ads/", "_blank");
+      });
+    }
   }
 
   onCompliment() {
